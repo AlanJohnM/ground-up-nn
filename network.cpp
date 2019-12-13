@@ -10,27 +10,97 @@
 #include <random>
 #include <cmath>
 #include "eigen-3.3.7/Eigen/Dense"
+#include "mnistReader.cpp"
+
+
+#define CYCLES 11//cant go above 10?
+
+#define TRAININGLABEL "train-labels.idx1-ubyte.gz"
+#define TRAININGIMAGE "train-images.idx3-ubyte.gz"
+
+#define TESTLABEL "t10k-labels.idx1-ubyte.gz"
+#define TESTIMAGE "t10k-images.idx3-ubyte.gz"
 
 using namespace std;
 using namespace Eigen;
 
 class Network
 {
+
+public:
     
+    Network(int layerCount, int sizes[]) {
+        init(layerCount,sizes);
+    }
+    
+    ~Network() {
+        delete ActivationLayers;
+        delete ActivationPrimeLayers;
+        delete Weights;
+        delete reader;
+    }
+    
+    //write state to some sort of file, be able to load a pre-computed state
+    //might need to make this normalize the data, could probably do that in reader?
+    void train(double learnRate) {
+        this->learnRate = learnRate;
+        unsigned char** input = reader->readImages(TRAININGIMAGE);
+        unsigned char* desired = reader->readLabels(TRAININGLABEL);
+        ActivationPrimeLayers[0].setOnes();//probably wrong?
+        
+//        for (int i = 1; i <= 28*28; i++) {
+//            cout << (double)input[1][i] << " ";
+//            if (i%28==0){cout<<endl;}
+//        }
+        
+        for (int i = 0; i < CYCLES; i++) {
+            Map<VectorXd> in((double*)input[i],28*28);
+            ActivationLayers[i] = in;
+            VectorXd correct(10);
+            correct.setZero();
+            correct[desired[i]] = 1;
+            feedForward();
+            backProp(correct);
+        }
+        delete input;//this probably leaks mem
+        delete desired;
+    }
+    
+    void test() {
+        
+    }
+    
+    void testCase(VectorXd in, VectorXd t) {
+        ActivationLayers[0] = in;
+        ActivationPrimeLayers[0].setOnes();//????
+        feedForward();
+        //logState();
+        backProp(t);
+        for (int i = 0; i < 10000; i++) {
+            feedForward();
+            backProp(t);
+        }
+        //logState();
+        feedForward();
+        //logState();
+    }
+    
+        
 private:
-    
+        
     VectorXd* ActivationLayers;
     VectorXd* ActivationPrimeLayers;
     MatrixXd* Weights;
     int layerCount;
     double learnRate;
-    
+    mnistReader* reader;
     
     void init(int layerCount, int sizes[]) {
         this->layerCount = layerCount;
-        ActivationLayers = new VectorXd[layerCount];//remember to delete
-        ActivationPrimeLayers = new VectorXd[layerCount];//remember to delete
-        Weights = new MatrixXd[layerCount-1];//remember to delete
+        reader = new mnistReader();
+        ActivationLayers = new VectorXd[layerCount];
+        ActivationPrimeLayers = new VectorXd[layerCount];
+        Weights = new MatrixXd[layerCount-1];
         for (int i = 0; i < layerCount; i++) {
             ActivationLayers[i] = VectorXd(sizes[i]);
             ActivationPrimeLayers[i] = VectorXd(sizes[i]);
@@ -40,7 +110,6 @@ private:
         for (int i = 0; i < layerCount-1; i++) {
             Weights[i] = MatrixXd(sizes[i+1],sizes[i]);
             Weights[i].setRandom();
-            Weights[i] *= 100;
         }
     }
     
@@ -54,7 +123,6 @@ private:
             ReLu(&ActivationLayers[i]);
             ReLuPrime(&ActivationPrimeLayers[i]);
         }
-//        cout << ActivationLayers[layerCount-1] << endl;
     }
     
     //currently naive GD, will need to change to SGD or batch or something
@@ -73,14 +141,18 @@ private:
     //maybe see if i can define a new entrywise operation
     void ReLu(VectorXd* v) {
         for (int i = 0; i < v->rows(); i++) {
-            (*v)[i] = fmax(0,(*v)[i]);
+            //(*v)[i] = fmax(0,(*v)[i]);
+            //THIS IS ACTUALLY LOGISITIC FOR NOW
+            (*v)[i] = (1/(1+exp(-(*v)[i])));
         }
     }
     
     //maybe see if i can define a new entrywise operation
     void ReLuPrime(VectorXd* v) {
         for (int i = 0; i < v->rows(); i++) {
-          (*v)[i] = ((*v)[i] >= 0 ? 1 : 0);
+//          (*v)[i] = ((*v)[i] >= 0 ? 1 : 0);
+            //THIS IS ACTUALLY LOGISITIC FOR NOW
+            (*v)[i] = (1/(1+exp(-(*v)[i])))*(1-(1/(1+exp(-(*v)[i]))));
         }
     }
     
@@ -88,7 +160,6 @@ private:
     VectorXd ErrorFunctionPrime(VectorXd output, VectorXd desired) {
         return output - desired;
     }
-    
     
     void logState() {
         cout << "CURRENT WEIGHTS:" << endl;
@@ -106,44 +177,10 @@ private:
             cout << ActivationPrimeLayers[i] << endl<< endl;
         }
     }
-    
-
-
-    
-public:
-    
-    Network(int layerCount, int sizes[]) {
-        init(layerCount,sizes);
-    }
-    
-    //write state to some sort of file, be able to load a pre-computed state
-    void train(double learnRate) {
-        this->learnRate = learnRate;
-        VectorXd v(15);
-        v << 100,100,100,100,0,0,0,100,100,0,100,100,100,100,0;
-        VectorXd t(5);
-        t << 1,0,0,0,0;
-        
-        testCase(v,t);
-    }
-    
-    void test() {
-        
-    }
-    
-    void testCase(VectorXd in, VectorXd t) {
-        ActivationLayers[0] = in;
-        ActivationPrimeLayers[0].setOnes();
-        feedForward();
-        logState();
-        backProp(t);
-        logState();
-    }
 };
 
 int main() {
-    Network* t = new Network(4,(int[]){15,10,7,5});
-    
+    Network* t = new Network(4,(int[]){784,250,50,10});
     t->train(0.01);
     
     delete t;
