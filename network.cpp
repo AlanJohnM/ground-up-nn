@@ -12,12 +12,11 @@
 #include "eigen-3.3.7/Eigen/Dense"
 #include "mnistReader.cpp"
 
-
-#define CYCLES 11//cant go above 10?
+#define CYCLES 60000
+#define TESTS 10000
 
 #define TRAININGLABEL "train-labels.idx1-ubyte.gz"
 #define TRAININGIMAGE "train-images.idx3-ubyte.gz"
-
 #define TESTLABEL "t10k-labels.idx1-ubyte.gz"
 #define TESTIMAGE "t10k-images.idx3-ubyte.gz"
 
@@ -33,67 +32,69 @@ public:
         init(layerCount,sizes);
     }
     
-    ~Network() {
-        delete ActivationLayers;
-        delete ActivationPrimeLayers;
-        delete Weights;
-        delete reader;
-    }
-    
     //write state to some sort of file, be able to load a pre-computed state
     //might need to make this normalize the data, could probably do that in reader?
     void train(double learnRate) {
         this->learnRate = learnRate;
         unsigned char** input = reader->readImages(TRAININGIMAGE);
         unsigned char* desired = reader->readLabels(TRAININGLABEL);
-        ActivationPrimeLayers[0].setOnes();//probably wrong?
-        
-//        for (int i = 1; i <= 28*28; i++) {
-//            cout << (double)input[1][i] << " ";
-//            if (i%28==0){cout<<endl;}
-//        }
+        ActivationPrimeLayers[0].setOnes();
         
         for (int i = 0; i < CYCLES; i++) {
-            Map<VectorXd> in((double*)input[i],28*28);
-            ActivationLayers[i] = in;
+            ActivationLayers[0] = vectorfy(input[i],28*28);
             VectorXd correct(10);
             correct.setZero();
             correct[desired[i]] = 1;
             feedForward();
             backProp(correct);
         }
-        delete input;//this probably leaks mem
-        delete desired;
+        //do some memory managment here
     }
     
+
     void test() {
+        unsigned char** input = reader->readImages(TESTIMAGE);
+        unsigned char* desired = reader->readLabels(TESTLABEL);
+        double totalError = 0;
+        int good = 0;
+        int bad = 0;
         
+        for (int i = 0; i < TESTS; i++) {
+            ActivationLayers[0] = vectorfy(input[i],28*28);
+            VectorXd correct(10);
+            correct.setZero();
+            correct[desired[i]] = 1;
+            feedForward();
+            
+            if (maxIndex(ActivationLayers[layerCount-1]) == desired[i]) {
+                good++;
+            } else {
+                bad++;
+            }
+            
+            cout << ActivationLayers[layerCount-1] << endl << correct << endl;
+            cout << "E:" << ErrorFunction(ActivationLayers[layerCount-1],correct) << endl << endl;
+            totalError += ErrorFunction(ActivationLayers[layerCount-1],correct);
+        }
+    
+        double avgError = totalError/TESTS;
+        cout << "AVERAGE ERROR: " << avgError << endl;
+        cout << "GOOD: " << good << endl;
+        cout << "BAD: " << bad << endl;
     }
     
     void testCase(VectorXd in, VectorXd t) {
-        ActivationLayers[0] = in;
-        ActivationPrimeLayers[0].setOnes();//????
-        feedForward();
-        //logState();
-        backProp(t);
-        for (int i = 0; i < 10000; i++) {
-            feedForward();
-            backProp(t);
-        }
-        //logState();
-        feedForward();
-        //logState();
+
     }
     
-        
 private:
         
     VectorXd* ActivationLayers;
     VectorXd* ActivationPrimeLayers;
     MatrixXd* Weights;
+    mnistReader* reader;
     int layerCount;
     double learnRate;
-    mnistReader* reader;
     
     void init(int layerCount, int sizes[]) {
         this->layerCount = layerCount;
@@ -119,13 +120,12 @@ private:
             VectorXd v(Weights[i-1]*ActivationLayers[i-1]);
             ActivationLayers[i] = v;
             ActivationPrimeLayers[i] = v;
-            //could be replaced with different Activation functions here
-            ReLu(&ActivationLayers[i]);
-            ReLuPrime(&ActivationPrimeLayers[i]);
+            ActivationFunction(&ActivationLayers[i]);
+            ActivationFunctionPrime(&ActivationPrimeLayers[i]);
         }
     }
     
-    //currently naive GD, will need to change to SGD or batch or something
+    //update to use weights as well, maybe try batch instead of SGD
     //assumes output to be tested is loaded into ActivationLayers[layerCount-1]
     void backProp(VectorXd desired) {
         VectorXd e = ErrorFunctionPrime(ActivationLayers[layerCount-1],desired);
@@ -138,25 +138,52 @@ private:
         }
     }
     
-    //maybe see if i can define a new entrywise operation
-    void ReLu(VectorXd* v) {
+    //also normalizes
+    VectorXd vectorfy(unsigned char* input, int size) {
+        double arr[size];
+        for (int i = 0; i < size; i++) {
+            arr[i] = ((double)input[i]/128)-1;
+        }
+        Map<VectorXd> v(arr,size);
+        return v;
+    }
+    
+    int maxIndex(VectorXd v) {
+        double maxVal = 0;
+        int maxIdx = 0;
+        for (int i = 0; i < v.rows(); i++) {
+            if (v[i] > maxVal) {
+                maxVal = v[i];
+                maxIdx = i;
+            }
+        }
+        return maxIdx;
+    }
+    
+    void ActivationFunction(VectorXd* v) {
         for (int i = 0; i < v->rows(); i++) {
-            //(*v)[i] = fmax(0,(*v)[i]);
-            //THIS IS ACTUALLY LOGISITIC FOR NOW
+//            (*v)[i] = fmax(0,(*v)[i]);
             (*v)[i] = (1/(1+exp(-(*v)[i])));
         }
     }
     
-    //maybe see if i can define a new entrywise operation
-    void ReLuPrime(VectorXd* v) {
+    void ActivationFunctionPrime(VectorXd* v) {
         for (int i = 0; i < v->rows(); i++) {
 //          (*v)[i] = ((*v)[i] >= 0 ? 1 : 0);
-            //THIS IS ACTUALLY LOGISITIC FOR NOW
             (*v)[i] = (1/(1+exp(-(*v)[i])))*(1-(1/(1+exp(-(*v)[i]))));
         }
     }
     
-    //abstracted out in case of more complex functions
+    double ErrorFunction(VectorXd out, VectorXd desired){
+        VectorXd diff = out - desired;
+        diff = diff.array().pow(2);
+        double err = 0;
+        for (int i = 0; i < 10; i++) {
+            err += diff[i]/2;
+        }
+        return err;
+    }
+    
     VectorXd ErrorFunctionPrime(VectorXd output, VectorXd desired) {
         return output - desired;
     }
@@ -177,13 +204,23 @@ private:
             cout << ActivationPrimeLayers[i] << endl<< endl;
         }
     }
+    
+    void printer(unsigned char* pic) {
+        for (int i = 1; i <= 28*28; i++) {
+            cout << (double)pic[i] << " ";
+            if (i%28==0){cout<<endl;}
+        }
+    }
+    
 };
 
 int main() {
-    Network* t = new Network(4,(int[]){784,250,50,10});
+    Network* t = new Network(3,(int[]){784,128,10});
+    t->train(0.1);
     t->train(0.01);
+    t->train(0.001);
+    t->train(0.0001);
+    t->test();
     
     delete t;
 }
-
-

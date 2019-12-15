@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
+#include <string>
 
 
 
@@ -20,20 +21,20 @@ public:
     
     mnistReader() {}
     
-    unsigned char* readLabels(char path[]) {
+    unsigned char* readLabels(string path) {
         ifstream raw(path,ifstream::binary);
         int magic;
         raw.read((char*)&magic,4);
         int count;
         raw.read((char*)&count,4);
         count = endianSwap(count);
-        
+            
         unsigned char* arr = new unsigned char[count];
         raw.read((char*)arr,count);
         return arr;
     }
     
-    unsigned char** readImages(char path[]) {
+    unsigned char** readImages(string path) {
         ifstream raw(path,ifstream::binary);
         int magic;
         int count;
