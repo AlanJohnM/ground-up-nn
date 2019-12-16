@@ -6,7 +6,7 @@ Machine Learning is often considered a gateway to the future. With the sorts of 
 
 ## What exactly is it?
 
-This is a digit recognition neural network using the MNIST database of handwritten digits. It is the classic example of the foundations of machine learning. I wrote a custom parser for the files containing the MNIST data, which is then fed through the neural network for training. The network uses Stochastic Gradient Descent with a variable learning rate, the  Sigmoid function for activation, and Mean Squared Error (MES) for a loss function. These functions, along with the architecture of the network are easily adjustable.
+This is a digit recognition neural network using the MNIST database of handwritten digits. It is the classic example of the foundations of machine learning. I wrote a custom parser for the files containing the MNIST data, which is then fed through the neural network for training. The network uses Stochastic Gradient Descent with a variable learning rate, the  Sigmoid function for activation, and Mean Squared Error (MSE) for a loss function. These functions, along with the architecture of the network are easily adjustable.
 
 ## What's next?
 
