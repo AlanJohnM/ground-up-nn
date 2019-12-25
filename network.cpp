@@ -215,11 +215,31 @@ private:
 };
 
 int main() {
-    Network* t = new Network(3,(int[]){784,128,10});
+    Network* t = new Network(5,(int[]){784,256,128,64,10});
+    t->train(0.1);
+    t->train(0.1);
+    t->train(0.1);
+    t->train(0.1);
+    t->train(0.1);
+    t->train(0.1);
+    t->train(0.1);
     t->train(0.1);
     t->train(0.01);
-    t->train(0.001);
-    t->train(0.0001);
+    t->train(0.01);
+    t->train(0.01);
+    t->train(0.01);
+    t->train(0.01);
+    t->train(0.01);
+    t->train(0.01);
+    t->train(0.01);
+    t->train(0.01);
+    t->train(0.01);
+    t->train(0.01);
+    t->train(0.01);
+    t->train(0.01);
+    t->train(0.01);
+    t->train(0.01);
+    t->train(0.01);
     t->test();
     
     delete t;
